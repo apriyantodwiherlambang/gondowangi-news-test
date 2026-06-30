@@ -1,28 +1,30 @@
-import { createClient } from 'redis';
+import { createClient, RedisClientType } from 'redis';
 import { NextResponse } from 'next/server';
 
+let client: RedisClientType | null = null;
+
 async function getRedisClient() {
-  const client = createClient({
+  if (client && client.isOpen) {
+    return client;
+  }
+
+  client = createClient({
     url: process.env.REDIS_URL
   });
 
   client.on('error', (err) => console.error('Redis Client Error', err));
-  
-  if (!client.isOpen) {
-    await client.connect();
-  }
+
+  await client.connect();
   return client;
 }
 
 export async function POST(request: Request) {
   try {
     const { slug } = await request.json();
-    const client = await getRedisClient();
-    
-    const views = await client.incr(`views:${slug}`);
-    
-    await client.disconnect();
-    
+    const redis = await getRedisClient();
+
+    const views = await redis.incr(`views:${slug}`);
+
     return NextResponse.json({ totalViews: views });
   } catch (error) {
     console.error("POST Error:", error);
@@ -34,12 +36,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
-    const client = await getRedisClient();
-    
-    const views = await client.get(`views:${slug}`);
-    
-    await client.disconnect();
-    
+    const redis = await getRedisClient();
+
+    const views = await redis.get(`views:${slug}`);
+
     return NextResponse.json({ totalViews: Number(views) || 0 });
   } catch (error) {
     console.error("GET Error:", error);
