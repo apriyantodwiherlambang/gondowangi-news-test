@@ -31,22 +31,35 @@ export default function BeritaPage({ params }: { params: Promise<{ lang: string,
         if (foundArticle) {
           setBerita(foundArticle);
 
-          const storageKey = `gondowangi_v4_view_count_${slug}_${lang}`;
           const cookieKey = `gondowangi_v4_read_session_${slug}_${lang}`;
-          
-          let currentViews = parseInt(localStorage.getItem(storageKey) || foundArticle.views.toString());
           const hasCountedInSession = document.cookie.split("; ").find((row) => row.startsWith(`${cookieKey}=`));
 
           if (!hasCountedInSession) {
-            currentViews += 1;
+            // User baru membaca: Panggil API untuk tambah +1 di database
             try {
-              localStorage.setItem(storageKey, currentViews.toString());
-            } catch (e) {
-              console.warn(e);
+              const res = await fetch(`/api/views`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug: `${slug}_${lang}` })
+              });
+              const data = await res.json();
+              setViewCount(data.totalViews);
+              
+              // Set cookie agar tidak terhitung lagi di sesi ini (selama 24 jam)
+              document.cookie = `${cookieKey}=true; path=/; max-age=86400; SameSite=Lax`; 
+            } catch (err) {
+              setViewCount(foundArticle.views);
             }
-            document.cookie = `${cookieKey}=true; path=/; max-age=86400; SameSite=Lax`; 
+          } else {
+            // Jika sudah pernah baca, cukup ambil total views terbaru
+            try {
+              const res = await fetch(`/api/views?slug=${slug}_${lang}`);
+              const data = await res.json();
+              setViewCount(data.totalViews || foundArticle.views);
+            } catch (err) {
+              setViewCount(foundArticle.views);
+            }
           }
-          setViewCount(currentViews);
         } else {
           setBerita(newsArray[0]);
           setViewCount(newsArray[0].views);
