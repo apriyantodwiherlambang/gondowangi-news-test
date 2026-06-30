@@ -27,46 +27,46 @@ export default function BeritaPage({ params }: { params: Promise<{ lang: string,
         setAllNews(newsArray);
         
         const foundArticle = newsArray.find((item: any) => item.slug === slug);
-        
-        if (foundArticle) {
-          setBerita(foundArticle);
+      
+          if (foundArticle) {
+            setBerita(foundArticle);
 
-          const cookieKey = `gondowangi_v4_read_session_${slug}_${lang}`;
-          const hasCountedInSession = document.cookie.split("; ").find((row) => row.startsWith(`${cookieKey}=`));
+            const cookieKey = `gondowangi_v4_read_session_${slug}_${lang}`;
+            const hasCountedInSession = document.cookie.includes(`${cookieKey}=true`);
+            const syncViews = async () => {
+              try {
+                let finalViews = foundArticle.views;
 
-          if (!hasCountedInSession) {
-            // User baru membaca: Panggil API untuk tambah +1 di database
-            try {
-              const res = await fetch(`/api/views`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slug: `${slug}_${lang}` })
-              });
-              const data = await res.json();
-              setViewCount(data.totalViews);
-              
-              // Set cookie agar tidak terhitung lagi di sesi ini (selama 24 jam)
-              document.cookie = `${cookieKey}=true; path=/; max-age=86400; SameSite=Lax`; 
-            } catch (err) {
-              setViewCount(foundArticle.views);
-            }
+                if (!hasCountedInSession) {
+                  const res = await fetch(`/api/views`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slug: `${slug}_${lang}` })
+                  });
+                  const data = await res.json();
+                  finalViews = data.totalViews;
+                  
+                  document.cookie = `${cookieKey}=true; path=/; max-age=86400; SameSite=Lax`;
+                } else {
+                  const res = await fetch(`/api/views?slug=${slug}_${lang}`);
+                  const data = await res.json();
+                  finalViews = data.totalViews;
+                }
+                setViewCount(finalViews);
+              } catch (err) {
+                console.error("Gagal sync:", err);
+                setViewCount(foundArticle.views);
+              }
+            };
+
+            syncViews();
           } else {
-            // Jika sudah pernah baca, cukup ambil total views terbaru
-            try {
-              const res = await fetch(`/api/views?slug=${slug}_${lang}`);
-              const data = await res.json();
-              setViewCount(data.totalViews || foundArticle.views);
-            } catch (err) {
-              setViewCount(foundArticle.views);
-            }
+            setBerita(newsArray[0]);
+            setViewCount(newsArray[0].views);
           }
-        } else {
-          setBerita(newsArray[0]);
-          setViewCount(newsArray[0].views);
-        }
       } catch (error) {
         console.error("Error loading page data:", error);
-      } finally { // TYPO DIPERBAIKI DI SINI
+      } finally {
         setIsLoading(false);
       }
     };
